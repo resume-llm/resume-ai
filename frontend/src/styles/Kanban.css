@@ -34,6 +34,16 @@
   color: var(--card-foreground);
   font-weight: 600;
 }
+.kanban__input, .kanban__textarea {
+  width: 100%;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--foreground);
+  margin: 6px 0;
+}
 .kanban__card-sub {
   color: var(--muted-foreground);
   font-size: 12px;

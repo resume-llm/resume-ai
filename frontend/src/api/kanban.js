@@ -21,3 +21,13 @@ export const createApplication = async (boardId, payload) => {
   const { data } = await axios.post(`${API_BASE}/kanban/boards/${boardId}/applications`, payload);
   return data;
 };
+
+export const updateApplication = async (applicationId, payload) => {
+  const { data } = await axios.put(`${API_BASE}/kanban/applications/${applicationId}`, payload);
+  return data;
+};
+
+export const moveApplication = async (applicationId, columnId) => {
+  const { data } = await axios.post(`${API_BASE}/kanban/applications/${applicationId}/move`, { column_id: columnId });
+  return data;
+};
