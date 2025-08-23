@@ -14,7 +14,7 @@ services:
     environment:
     - CORS_ORIGIN=http://localhost:8080
     - LLM_URL=http://host.docker.internal:11434/api/generate
-    - MODEL_NAME=gemma3
+    - MODEL_NAME=gemma3:1b
     - PORT=5001
     ports:
     - 5001:5001
@@ -53,8 +53,9 @@ services:
     environment:
       CORS_ORIGIN: http://localhost:8080
       DATABASE_URL: postgresql+psycopg2://appuser:apppass@postgres:5432/app_db
+      AI_PROVIDER: ollama
+      MODEL_NAME: gemma3:1b
       OLLAMA_BASE_URL: http://host.docker.internal:11434
-      MODEL_NAME: gemma3
     ports:
       - 8000:8000
     depends_on:

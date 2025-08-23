@@ -11,19 +11,35 @@ from .config import settings
 from .db import SessionLocal
 from .models import Application, Board, Column
 
-# LangChain Ollama chat model
+# LangChain providers
 try:
-    from langchain_ollama import ChatOllama
-except Exception as e:  # pragma: no cover
+    from langchain_ollama import ChatOllama  # Ollama provider
+except Exception:  # pragma: no cover
     ChatOllama = None  # type: ignore
+
+try:
+    from langchain_openai import ChatOpenAI  # OpenAI-compatible provider
+except Exception:  # pragma: no cover
+    ChatOpenAI = None  # type: ignore
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
 
 def get_llm():
-    if ChatOllama is None:
-        raise HTTPException(status_code=500, detail="ChatOllama is not available. Check dependencies.")
-    return ChatOllama(model=settings.MODEL_NAME, base_url=settings.OLLAMA_BASE_URL, temperature=0.2)
+    provider = settings.AI_PROVIDER.lower()
+    if provider == "ollama":
+        if ChatOllama is None:
+            raise HTTPException(status_code=500, detail="ChatOllama is not available. Check dependencies.")
+        return ChatOllama(model=settings.MODEL_NAME, base_url=settings.OLLAMA_BASE_URL, temperature=0.2)
+    elif provider == "openai":
+        if ChatOpenAI is None:
+            raise HTTPException(status_code=500, detail="ChatOpenAI is not available. Check dependencies.")
+        if not settings.OPENAI_BASE_URL or not settings.OPENAI_API_KEY:
+            raise HTTPException(status_code=500, detail="OPENAI_BASE_URL and OPENAI_API_KEY must be set for OpenAI provider")
+        # ChatOpenAI accepts base_url for compatible providers (e.g., local OpenAI-compatible gateways)
+        return ChatOpenAI(model=settings.MODEL_NAME, base_url=settings.OPENAI_BASE_URL, api_key=settings.OPENAI_API_KEY, temperature=0.2)
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported AI_PROVIDER: {settings.AI_PROVIDER}")
 
 
 class SummarizeBoardRequest(BaseModel):
