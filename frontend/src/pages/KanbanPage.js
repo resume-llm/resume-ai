@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { getColumns, getApplications, moveApplication, updateApplication } from "../api/kanban";
+import { getColumns, getApplications, moveApplication, updateApplication, aiSummarizeBoard, aiTagApplication, aiNextSteps } from "../api/kanban";
 import "../styles/Kanban.css";
 
 export default function KanbanPage() {
@@ -9,6 +9,8 @@ export default function KanbanPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState({}); // { [id]: { title, company, description } }
+  const [selected, setSelected] = useState(null); // card for modal
+  const [ai, setAi] = useState({ loading: false, summary: "", tags: [], steps: [] });
 
   useEffect(() => {
     let mounted = true;
@@ -89,6 +91,71 @@ export default function KanbanPage() {
     }
   };
 
+  const openDetails = (card) => {
+    setSelected(card);
+    setAi({ loading: false, summary: "", tags: [], steps: [] });
+  };
+  const closeDetails = () => {
+    setSelected(null);
+    setAi({ loading: false, summary: "", tags: [], steps: [] });
+  };
+
+  const runSummarize = async () => {
+    try {
+      setAi((s) => ({ ...s, loading: true, summary: "" }));
+      const { summary } = await aiSummarizeBoard(BOARD_ID);
+      setAi((s) => ({ ...s, loading: false, summary }));
+    } catch (e) {
+      setAi((s) => ({ ...s, loading: false }));
+      setError("AI summarize failed");
+    }
+  };
+  const runTag = async () => {
+    if (!selected) return;
+    try {
+      setAi((s) => ({ ...s, loading: true }));
+      const { tags } = await aiTagApplication(selected.id, 5);
+      setAi((s) => ({ ...s, loading: false, tags }));
+      // also update the card with tags
+      const updated = await updateApplication(selected.id, { ...selected, tags });
+      setApps((prev) => prev.map((a) => (a.id === selected.id ? updated : a)));
+      setSelected(updated);
+    } catch (e) {
+      setAi((s) => ({ ...s, loading: false }));
+      setError("AI tag failed");
+    }
+  };
+  const runNextSteps = async () => {
+    if (!selected) return;
+    try {
+      setAi((s) => ({ ...s, loading: true }));
+      const { steps } = await aiNextSteps(selected.id);
+      setAi((s) => ({ ...s, loading: false, steps }));
+    } catch (e) {
+      setAi((s) => ({ ...s, loading: false }));
+      setError("AI next steps failed");
+    }
+  };
+
+  const saveSelected = async () => {
+    if (!selected) return;
+    try {
+      const payload = {
+        title: selected.title || "",
+        company: selected.company || "",
+        description: selected.description || "",
+        status: selected.status || "",
+        tags: selected.tags || [],
+        column_id: selected.column_id,
+      };
+      const updated = await updateApplication(selected.id, payload);
+      setApps((prev) => prev.map((a) => (a.id === selected.id ? updated : a)));
+      setSelected(updated);
+    } catch (e) {
+      setError("Failed to save details");
+    }
+  };
+
   if (loading) return <div className="kanban__loading">Loading board...</div>;
   if (error) return <div className="kanban__error">{error}</div>;
 
@@ -154,6 +221,7 @@ export default function KanbanPage() {
                         ))}
                       </select>
                       <button className="btn" onClick={() => startEdit(card)}>Edit</button>
+                      <button className="btn" onClick={() => openDetails(card)}>Details</button>
                       <button className="btn btn--ghost" title="Summarize">AI: Summarize</button>
                       <button className="btn btn--ghost" title="Tag">AI: Tags</button>
                       <button className="btn btn--ghost" title="Next Steps">AI: Next</button>
@@ -165,6 +233,74 @@ export default function KanbanPage() {
           </div>
         </div>
       ))}
+
+      {selected && (
+        <div className="modal__backdrop" onClick={closeDetails}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal__header">
+              <h3>Application #{selected.id}</h3>
+              <button className="btn" onClick={closeDetails}>Close</button>
+            </div>
+            <div className="modal__body">
+              <div className="kanban__input-group">
+                <label>Title</label>
+                <input className="kanban__input" value={selected.title || ""} onChange={(e) => setSelected({ ...selected, title: e.target.value })} />
+              </div>
+              <div className="kanban__input-group">
+                <label>Company</label>
+                <input className="kanban__input" value={selected.company || ""} onChange={(e) => setSelected({ ...selected, company: e.target.value })} />
+              </div>
+              <div className="kanban__input-group">
+                <label>Description</label>
+                <textarea className="kanban__textarea" rows={5} value={selected.description || ""} onChange={(e) => setSelected({ ...selected, description: e.target.value })} />
+              </div>
+              <div className="kanban__input-group">
+                <label>Column</label>
+                <select className="kanban__input" value={selected.column_id || ""} onChange={(e) => setSelected({ ...selected, column_id: Number(e.target.value) })}>
+                  {columns.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="kanban__input-group">
+                <label>Tags</label>
+                <div className="kanban__tags">
+                  {(selected.tags || []).map((t, i) => (<span key={i} className="kanban__tag">{t}</span>))}
+                </div>
+              </div>
+              <div className="kanban__card-actions">
+                <button className="btn" onClick={() => saveSelected()}>Save</button>
+                <button className="btn" onClick={runTag} disabled={ai.loading}>AI: Tags</button>
+                <button className="btn" onClick={runNextSteps} disabled={ai.loading}>AI: Next Steps</button>
+                <button className="btn" onClick={runSummarize} disabled={ai.loading}>AI: Summarize Board</button>
+              </div>
+              {ai.loading && <div className="kanban__loading">AI working...</div>}
+              {ai.tags.length > 0 && (
+                <div>
+                  <h4>Suggested Tags</h4>
+                  <div className="kanban__tags">
+                    {ai.tags.map((t, i) => (<span key={i} className="kanban__tag">{t}</span>))}
+                  </div>
+                </div>
+              )}
+              {ai.steps.length > 0 && (
+                <div>
+                  <h4>Next Steps</h4>
+                  <ol>
+                    {ai.steps.map((s, i) => (<li key={i}>{s}</li>))}
+                  </ol>
+                </div>
+              )}
+              {ai.summary && (
+                <div>
+                  <h4>Board Summary</h4>
+                  <p>{ai.summary}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

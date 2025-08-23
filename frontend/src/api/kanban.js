@@ -31,3 +31,19 @@ export const moveApplication = async (applicationId, columnId) => {
   const { data } = await axios.post(`${API_BASE}/kanban/applications/${applicationId}/move`, { column_id: columnId });
   return data;
 };
+
+// AI endpoints
+export const aiSummarizeBoard = async (boardId, focus) => {
+  const { data } = await axios.post(`${API_BASE}/ai/summarize-board`, { board_id: boardId, focus });
+  return data; // { summary }
+};
+
+export const aiTagApplication = async (applicationId, max_tags = 5) => {
+  const { data } = await axios.post(`${API_BASE}/ai/tag-application`, { application_id: applicationId, max_tags });
+  return data; // { tags }
+};
+
+export const aiNextSteps = async (applicationId) => {
+  const { data } = await axios.post(`${API_BASE}/ai/next-steps`, { application_id: applicationId });
+  return data; // { steps }
+};

@@ -89,3 +89,41 @@
   color: var(--foreground);
   padding: 12px;
 }
+
+/* Modal */
+.modal__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 50;
+}
+.modal {
+  width: 100%;
+  max-width: 720px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgba(16, 24, 40, 0.18);
+  padding: 16px;
+}
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.kanban__input-group label {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  display: block;
+  margin-bottom: 4px;
+}
