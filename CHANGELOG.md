@@ -21,6 +21,23 @@
   - MLflow switched to local image built from `docker/mlflow/Dockerfile` with `psycopg2-binary`, exposed on host `5002`.
 - Postgres init script at `docker/postgres/init.sql`: creates `appuser`, databases `app_db` and `mlflow`.
 
+### Kanban UI and Resume Integration
+- Frontend `KanbanPage` moved header outside grid and added `.kanban__page-header` styles for parity with original board.
+- Modal UX improved: wider modal, internal scrolling, better resume editor grid.
+- Markdown preview uses `react-markdown` with improved typography and spacing.
+- Fixed code-fence issue by stripping leading/trailing ``` from AI output to avoid code-block previews.
+- Added Save-to-Card workflow:
+  - `POST /resumes` persists markdown linked to `application_id`.
+  - Save action shows success notice and counts saved versions per card.
+- Added Export via Pandoc:
+  - `GET /resumes/{resume_id}/export?format=pdf|docx`
+  - `GET /resumes/applications/{application_id}/export?format=pdf|docx` (latest resume)
+  - Frontend buttons “Export PDF/DOCX” in Resume tab, downloading blobs.
+
+### Developer Notes
+- Frontend env: `REACT_APP_API_BASE` should point to `http://localhost:8000` when running via docker-compose.
+- If styles seem off, hard refresh (Cmd+Shift+R) to invalidate cached CSS.
+
 ### How to run
 1. Stop previous stack (if any):
    ```bash

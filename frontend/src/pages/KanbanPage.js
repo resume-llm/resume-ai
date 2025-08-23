@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { getColumns, getApplications, moveApplication, updateApplication, aiSummarizeBoard, aiTagApplication, aiNextSteps } from "../api/kanban";
+import ReactMarkdown from "react-markdown";
+import { getColumns, getApplications, moveApplication, updateApplication, aiSummarizeBoard, aiTagApplication, aiNextSteps, aiGenerateResume, createResume, createApplication, exportLatestResume, listResumesForApplication } from "../api/kanban";
 import "../styles/Kanban.css";
 
 export default function KanbanPage() {
@@ -10,7 +11,16 @@ export default function KanbanPage() {
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState({}); // { [id]: { title, company, description } }
   const [selected, setSelected] = useState(null); // card for modal
-  const [ai, setAi] = useState({ loading: false, summary: "", tags: [], steps: [] });
+  const [ai, setAi] = useState({ loading: false, summary: "", tags: [], steps: [], notice: "" });
+  const [tab, setTab] = useState("details"); // details | resume
+  const [resume, setResume] = useState({ jd: "", profile: "", markdown: "" });
+  const stripCodeFences = (md = "") => {
+    if (!md) return "";
+    // remove leading ```lang and trailing ``` if present
+    const startStripped = md.replace(/^```[a-zA-Z]*\n?/, "");
+    const endStripped = startStripped.replace(/\n?```\s*$/, "");
+    return endStripped.trim();
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -36,6 +46,80 @@ export default function KanbanPage() {
       mounted = false;
     };
   }, []);
+
+  const addApplication = async () => {
+    try {
+      const defaultColId = columns[0]?.id || null;
+      const payload = {
+        title: "New Application",
+        company: "",
+        description: "",
+        status: "Applied",
+        tags: [],
+        column_id: defaultColId,
+      };
+      const created = await createApplication(BOARD_ID, payload);
+      setApps((prev) => [created, ...prev]);
+    } catch (e) {
+      setError("Failed to add application");
+    }
+  };
+
+  const generateResume = async () => {
+    if (!selected || !resume.jd) return;
+    try {
+      setAi((s) => ({ ...s, loading: true }));
+      const { markdown } = await aiGenerateResume({ applicationId: selected.id, jobDescription: resume.jd, profile: resume.profile });
+      setResume((r) => ({ ...r, markdown: stripCodeFences(markdown) }));
+    } catch (e) {
+      setError("AI resume generation failed");
+    } finally {
+      setAi((s) => ({ ...s, loading: false }));
+    }
+  };
+
+  const saveResume = async () => {
+    if (!selected || !resume.markdown) return;
+    try {
+      setAi((s) => ({ ...s, loading: true }));
+      await createResume({ applicationId: selected.id, jobDescription: resume.jd, inputProfile: resume.profile, markdown: stripCodeFences(resume.markdown) });
+      // optional: fetch count to reflect it was saved
+      try {
+        const list = await listResumesForApplication(selected.id);
+        setAi((s) => ({ ...s, notice: `Saved. Total resumes: ${list.length}` }));
+      } catch {}
+    } catch (e) {
+      setError("Failed to save resume");
+    } finally {
+      setAi((s) => ({ ...s, loading: false }));
+    }
+  };
+
+  const downloadBlob = (blob, filename) => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const exportLatest = async (format) => {
+    if (!selected) return;
+    try {
+      setAi((s) => ({ ...s, loading: true }));
+      const response = await exportLatestResume(selected.id, format);
+      const filename = response.headers['content-disposition']?.split('filename=')[1]?.replace(/"/g, '') || `resume.${format}`;
+      downloadBlob(response.data, filename);
+      setAi((s) => ({ ...s, notice: `Exported ${format.toUpperCase()}` }));
+    } catch (e) {
+      setError(`Failed to export ${format.toUpperCase()}`);
+    } finally {
+      setAi((s) => ({ ...s, loading: false }));
+    }
+  };
 
   const grouped = useMemo(() => {
     const byCol = new Map();
@@ -94,6 +178,8 @@ export default function KanbanPage() {
   const openDetails = (card) => {
     setSelected(card);
     setAi({ loading: false, summary: "", tags: [], steps: [] });
+    setTab("details");
+    setResume({ jd: card.description || "", profile: "", markdown: "" });
   };
   const closeDetails = () => {
     setSelected(null);
@@ -160,7 +246,17 @@ export default function KanbanPage() {
   if (error) return <div className="kanban__error">{error}</div>;
 
   return (
-    <div className="kanban">
+    <div>
+      <div className="kanban__page-header">
+        <h2 style={{ margin: 0, fontSize: 16 }}>Kanban</h2>
+        <button className="btn" onClick={addApplication}>+ Add Application</button>
+      </div>
+      {ai.loading && (
+        <div className="progress">
+          <div className="progress__bar" />
+        </div>
+      )}
+      <div className="kanban">
       {columns.map((col) => (
         <div className="kanban__column" key={col.id}>
           <div className="kanban__column-header">
@@ -222,9 +318,6 @@ export default function KanbanPage() {
                       </select>
                       <button className="btn" onClick={() => startEdit(card)}>Edit</button>
                       <button className="btn" onClick={() => openDetails(card)}>Details</button>
-                      <button className="btn btn--ghost" title="Summarize">AI: Summarize</button>
-                      <button className="btn btn--ghost" title="Tag">AI: Tags</button>
-                      <button className="btn btn--ghost" title="Next Steps">AI: Next</button>
                     </div>
                   </>
                 )}
@@ -241,7 +334,12 @@ export default function KanbanPage() {
               <h3>Application #{selected.id}</h3>
               <button className="btn" onClick={closeDetails}>Close</button>
             </div>
+            <div className="modal__tabs">
+              <button className={`tab ${tab === "details" ? "active" : ""}`} onClick={() => setTab("details")}>Details</button>
+              <button className={`tab ${tab === "resume" ? "active" : ""}`} onClick={() => setTab("resume")}>Resume</button>
+            </div>
             <div className="modal__body">
+              {tab === "details" && (<>
               <div className="kanban__input-group">
                 <label>Title</label>
                 <input className="kanban__input" value={selected.title || ""} onChange={(e) => setSelected({ ...selected, title: e.target.value })} />
@@ -253,6 +351,14 @@ export default function KanbanPage() {
               <div className="kanban__input-group">
                 <label>Description</label>
                 <textarea className="kanban__textarea" rows={5} value={selected.description || ""} onChange={(e) => setSelected({ ...selected, description: e.target.value })} />
+              </div>
+              <div className="kanban__input-group">
+                <label>Status</label>
+                <select className="kanban__input" value={selected.status || ""} onChange={(e) => setSelected({ ...selected, status: e.target.value })}>
+                  {['Applied','Interviewing','Offer','Rejected'].map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
               </div>
               <div className="kanban__input-group">
                 <label>Column</label>
@@ -297,10 +403,50 @@ export default function KanbanPage() {
                   <p>{ai.summary}</p>
                 </div>
               )}
+              </>)}
+
+              {tab === "resume" && (
+                <>
+                  <div className="kanban__input-group">
+                    <label>Job Description</label>
+                    <textarea className="kanban__textarea" rows={6} value={resume.jd} onChange={(e) => setResume({ ...resume, jd: e.target.value })} />
+                  </div>
+                  <div className="kanban__input-group">
+                    <label>Profile (opcional)</label>
+                    <textarea className="kanban__textarea" rows={4} value={resume.profile} onChange={(e) => setResume({ ...resume, profile: e.target.value })} />
+                  </div>
+                  <div className="resume__editor">
+                    <div className="resume__pane">
+                      <label>Markdown</label>
+                      <textarea className="kanban__textarea" rows={12} value={resume.markdown} onChange={(e) => setResume({ ...resume, markdown: e.target.value })} />
+                    </div>
+                    <div className="resume__pane">
+                      <label>Preview</label>
+                      <div className="resume__preview">
+                        {resume.markdown ? (
+                          <div className="resume__preview-body markdown-body">
+                            <ReactMarkdown>{stripCodeFences(resume.markdown)}</ReactMarkdown>
+                          </div>
+                        ) : (
+                          <span className="resume__preview-empty">No content yet</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="kanban__card-actions">
+                    <button className="btn" onClick={generateResume} disabled={ai.loading || !resume.jd}>AI: Generate Resume</button>
+                    <button className="btn" onClick={saveResume} disabled={ai.loading || !resume.markdown}>Save to Card</button>
+                    <button className="btn" onClick={() => exportLatest('pdf')} disabled={ai.loading}>Export PDF</button>
+                    <button className="btn" onClick={() => exportLatest('docx')} disabled={ai.loading}>Export DOCX</button>
+                  </div>
+                  {ai.notice && <div className="kanban__loading">{ai.notice}</div>}
+                </>
+              )}
             </div>
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

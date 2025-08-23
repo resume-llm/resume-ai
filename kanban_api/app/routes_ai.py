@@ -90,6 +90,47 @@ def summarize_board(body: SummarizeBoardRequest):
         db.close()
 
 
+# -------- Generate Resume (Markdown) --------
+class GenerateResumeRequest(BaseModel):
+    application_id: int
+    job_description: str
+    profile: Optional[str] = None
+
+
+class GenerateResumeResponse(BaseModel):
+    markdown: str
+
+
+@router.post("/generate-resume", response_model=GenerateResumeResponse)
+def generate_resume(body: GenerateResumeRequest):
+    db = SessionLocal()
+    try:
+        app = db.query(Application).filter(Application.id == body.application_id).first()
+        if not app:
+            raise HTTPException(status_code=404, detail="Application not found")
+        profile_text = f"\nCandidate profile:\n{body.profile}" if body.profile else ""
+        prompt = (
+            "You are a resume writer. Create a concise, tailored resume in GitHub-flavored Markdown "
+            "for the following job application and job description. Focus on impact, keywords, and quantifiable results.\n"
+            "Return only valid Markdown.\n\n"
+            "Application:\nTitle: {title}\nCompany: {company}\nDescription: {desc}\n"
+            "Job Description:\n{jd}\n"
+            + profile_text +
+            "\nFormat: start with a short summary, then skills, experience (bullets), education."
+        ).format(
+            title=app.title,
+            company=app.company or "-",
+            desc=app.description or "-",
+            jd=body.job_description,
+        )
+        llm = get_llm()
+        msg = llm.invoke(prompt)
+        text = getattr(msg, "content", str(msg))
+        return GenerateResumeResponse(markdown=text)
+    finally:
+        db.close()
+
+
 class TagApplicationRequest(BaseModel):
     application_id: int
     max_tags: int = 5

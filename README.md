@@ -62,6 +62,48 @@ curl -s http://localhost:8000/kanban/boards/1/applications
 
 All generated resumes and related files are saved in the local ./output directory, which is mounted into the backend container.
 
+## 🧾 Kanban: Save Resume to Card & Export
+
+You can generate, edit, save, and export resumes directly from the Kanban modal (Details → Resume tab).
+
+### From the UI
+
+1. Open a card → Details → Resume tab.
+2. Paste the Job Description and optionally your Profile, then click "AI: Generate Resume".
+3. Edit the Markdown as needed and click "Save to Card".
+   - A notice will show the total number of saved versions linked to this card.
+4. Click "Export PDF" or "Export DOCX" to download via Pandoc.
+
+### API Endpoints (FastAPI)
+
+- Create/save resume linked to a card:
+
+```bash
+curl -s -X POST http://localhost:8000/resumes \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "application_id": 1,
+        "job_description": "...",
+        "input_profile": "...",
+        "markdown": "# My Resume..."
+      }'
+```
+
+- List resumes for a card:
+
+```bash
+curl -s http://localhost:8000/resumes/applications/1
+```
+
+- Export latest resume for a card (PDF or DOCX):
+
+```bash
+curl -L -o resume.pdf  "http://localhost:8000/resumes/applications/1/export?format=pdf"
+curl -L -o resume.docx "http://localhost:8000/resumes/applications/1/export?format=docx"
+```
+
+Pandoc is installed in the `kanban_api` container (see `kanban_api/Dockerfile`).
+
 ## 🤖 AI (Ollama) Setup (Local Host)
 
 The Kanban AI endpoints use Ollama via `OLLAMA_BASE_URL`. To run locally on the host:
