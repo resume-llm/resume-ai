@@ -1,0 +1,27 @@
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: #0f172a;
+  color: #fff;
+}
+.navbar a {
+  color: #e2e8f0;
+  text-decoration: none;
+}
+.navbar__brand a {
+  font-weight: 700;
+  color: #fff;
+}
+.navbar__links {
+  list-style: none;
+  display: flex;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+}
+.navbar__links .active {
+  border-bottom: 2px solid #38bdf8;
+  color: #fff;
+}

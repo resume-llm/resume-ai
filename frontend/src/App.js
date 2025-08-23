@@ -1,13 +1,23 @@
 import React from "react";
-import ResumeForm from "./components/ResumeForm";
+import { Routes, Route, Navigate } from "react-router-dom";
+import Navbar from "./components/Navbar";
+import ResumePage from "./pages/ResumePage";
+import KanbanPage from "./pages/KanbanPage";
 import "./styles/ResumeForm.css";
 
 function App() {
     return (
-        <div className="container">
-            <h1>ATS Resume Generator</h1>
-            <ResumeForm />
-        </div>
+        <>
+            <Navbar />
+            <div className="container">
+                <Routes>
+                    <Route path="/" element={<Navigate to="/resume" replace />} />
+                    <Route path="/resume" element={<ResumePage />} />
+                    <Route path="/kanban" element={<KanbanPage />} />
+                    <Route path="*" element={<Navigate to="/resume" replace />} />
+                </Routes>
+            </div>
+        </>
     );
 }
 
