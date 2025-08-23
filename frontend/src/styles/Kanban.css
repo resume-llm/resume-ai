@@ -1,39 +1,41 @@
 .kanban {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
   align-items: start;
+  padding: 20px;
 }
 .kanban__column {
-  background: #0b1220;
-  border: 1px solid #1f2937;
-  border-radius: 8px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   padding: 8px;
-  color: #e5e7eb;
+  color: var(--foreground);
 }
 .kanban__column-header h3 {
-  margin: 4px 8px 12px;
+  margin: 6px 8px 12px;
   font-size: 14px;
-  color: #e5e7eb;
-  letter-spacing: 0.3px;
+  color: var(--foreground);
+  letter-spacing: 0.2px;
 }
 .kanban__cards {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 .kanban__card {
-  background: #0f172a;
-  border: 1px solid #1f2937;
-  border-radius: 8px;
-  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 2px 8px rgba(16, 24, 40, 0.06);
 }
 .kanban__card-title {
-  color: #fff;
+  color: var(--card-foreground);
   font-weight: 600;
 }
 .kanban__card-sub {
-  color: #a3a3a3;
+  color: var(--muted-foreground);
   font-size: 12px;
   margin-bottom: 6px;
 }
@@ -41,11 +43,11 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin: 6px 0;
+  margin: 8px 0 6px;
 }
 .kanban__tag {
-  background: #0ea5e9;
-  color: #001018;
+  background: var(--primary);
+  color: #0b2330;
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 11px;
@@ -53,27 +55,27 @@
 }
 .kanban__desc {
   font-size: 12px;
-  color: #c7c7c7;
-  margin: 6px 0 8px;
+  color: var(--muted-foreground);
+  margin: 6px 0 10px;
 }
 .kanban__card-actions {
   display: flex;
-  gap: 6px;
+  gap: 8px;
 }
 .btn {
-  border: 1px solid #334155;
-  background: transparent;
-  color: #e2e8f0;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--foreground);
   padding: 6px 10px;
   border-radius: 6px;
   font-size: 12px;
   cursor: pointer;
 }
 .btn--ghost:hover {
-  background: #0b3751;
-  border-color: #0ea5e9;
+  background: rgba(126, 196, 207, 0.12);
+  border-color: var(--primary);
 }
 .kanban__loading, .kanban__error {
-  color: #e2e8f0;
+  color: var(--foreground);
   padding: 12px;
 }
