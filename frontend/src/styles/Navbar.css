@@ -3,16 +3,17 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1rem;
-  background: #0f172a;
-  color: #fff;
+  background: #ffffff;
+  color: var(--foreground);
+  border-bottom: 1px solid var(--border);
 }
 .navbar a {
-  color: #e2e8f0;
+  color: var(--foreground);
   text-decoration: none;
 }
 .navbar__brand a {
   font-weight: 700;
-  color: #fff;
+  color: var(--foreground);
 }
 .navbar__links {
   list-style: none;
@@ -22,6 +23,6 @@
   padding: 0;
 }
 .navbar__links .active {
-  border-bottom: 2px solid #38bdf8;
-  color: #fff;
+  border-bottom: 2px solid var(--primary);
+  color: var(--foreground);
 }

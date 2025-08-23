@@ -9,14 +9,12 @@ function App() {
     return (
         <>
             <Navbar />
-            <div className="container">
-                <Routes>
-                    <Route path="/" element={<Navigate to="/resume" replace />} />
-                    <Route path="/resume" element={<ResumePage />} />
-                    <Route path="/kanban" element={<KanbanPage />} />
-                    <Route path="*" element={<Navigate to="/resume" replace />} />
-                </Routes>
-            </div>
+            <Routes>
+                <Route path="/" element={<Navigate to="/resume" replace />} />
+                <Route path="/resume" element={<ResumePage />} />
+                <Route path="/kanban" element={<KanbanPage />} />
+                <Route path="*" element={<Navigate to="/resume" replace />} />
+            </Routes>
         </>
     );
 }

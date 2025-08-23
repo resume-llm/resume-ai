@@ -3,7 +3,7 @@ import ResumeForm from "../components/ResumeForm";
 
 export default function ResumePage() {
   return (
-    <div>
+    <div className="container">
       <h1>ATS Resume Generator</h1>
       <ResumeForm />
     </div>
