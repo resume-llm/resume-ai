@@ -1,0 +1,16 @@
+:root {
+  --background: #f0f0f0; /* Light gray */
+  --foreground: #111827; /* Tailwind gray-900-ish */
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --border: #e5e7eb; /* gray-200 */
+  --muted-foreground: #6b7280; /* gray-500 */
+  --primary: #7ec4cf; /* Soft Blue */
+  --accent: #faf884; /* Light Yellow */
+  --radius: 8px;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}

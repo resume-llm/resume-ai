@@ -127,6 +127,11 @@ async function callLLM(prompt) {
                     }
                 },
             }
+        }, {
+            headers: {
+                "Content-Type": "application/json",
+                ...(process.env.OPENAI_API_KEY ? { "Authorization": `Bearer ${process.env.OPENAI_API_KEY}` } : {})
+            }
         });
 
         logger.info("📡 OpenAI API Raw Response:", response.data);
@@ -145,3 +150,4 @@ async function callLLM(prompt) {
 }
 
 module.exports = { callLLM };
+

@@ -18,3 +18,52 @@ services:
     - PORT=5001
     ports:
     - 5001:5001
+
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: apppass
+      POSTGRES_DB: app_db
+    ports:
+      - 5432:5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appuser -d app_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  mlflow:
+    build: ./docker/mlflow
+    container_name: mlflow
+    ports:
+      - 5002:5000
+    depends_on:
+      - postgres
+    volumes:
+      - mlflow_artifacts:/mlflow-artifacts
+
+  kanban_api:
+    build: ./kanban_api
+    container_name: kanban_api
+    environment:
+      CORS_ORIGIN: http://localhost:8080
+      DATABASE_URL: postgresql+psycopg2://appuser:apppass@postgres:5432/app_db
+      AI_PROVIDER: ollama
+      MODEL_NAME: gemma3:1b
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    ports:
+      - 8000:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  pgdata:
+  mlflow_artifacts:
