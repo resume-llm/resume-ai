@@ -1,37 +1,60 @@
-# 🧠 Resume Builder App
+# Resume AI
 
-This project includes:
+Resume AI is a local-first resume workspace that helps you:
 
-- A classic Resume Generator (`backend` + `frontend`).
-- A new Kanban API (`kanban_api/`) with AI endpoints using LangChain + Ollama.
-- Postgres database and MLflow service.
+- track job applications in a Kanban board
+- generate and edit resumes for specific roles
+- save multiple resume versions to an application card
+- export the latest version as PDF or DOCX
 
-All services are orchestrated using Docker Compose.
+The stack runs locally with Docker Compose and can use either Ollama or an OpenAI-compatible provider.
 
-## 📦 Requirements
+## Quick Start
 
-- [Docker](https://www.docker.com/)
-- [Docker Compose](https://docs.docker.com/compose/)
-- Optional (for local AI): [Ollama](https://ollama.com/) installed on the host
+### Requirements
 
-## 🚀 Run the Stack (Docker Compose)
+- Docker
+- Docker Compose
+- Optional: Ollama, if you want local AI generation
 
-Start all services (Postgres, MLflow, Kanban API, backend, frontend):
+### Start the Stack
 
 ```bash
 docker compose up -d --build
 ```
 
-- Frontend (CRA): http://localhost:8080
-- Node Backend: http://localhost:5001
-- Kanban API (FastAPI): http://localhost:8000
-- MLflow UI: http://localhost:5002
+Once the services are running:
 
-Check health of the Kanban API:
+| Service | URL |
+| --- | --- |
+| Frontend | `http://localhost:8080` |
+| Node backend | `http://localhost:5001` |
+| Kanban API | `http://localhost:8000` |
+| MLflow UI | `http://localhost:5002` |
+
+Check the Kanban API health:
 
 ```bash
 curl -s http://localhost:8000/health
 ```
+
+## Typical Workflow
+
+1. Open the frontend.
+2. Create or select an application card.
+3. Open the `Details -> Resume` tab.
+4. Paste the job description and optional profile notes.
+5. Generate a draft, edit it, save it to the card, then export it.
+
+## Core Features
+
+- Resume generation through the classic Node backend
+- Kanban application tracking through the FastAPI service
+- AI-assisted board summaries, application tags, and next-step suggestions
+- Resume version history linked to application cards
+- PDF and DOCX export through Pandoc
+
+## Kanban and Resume API
 
 Basic Kanban endpoints:
 
@@ -41,42 +64,7 @@ curl -s http://localhost:8000/kanban/boards/1/columns
 curl -s http://localhost:8000/kanban/boards/1/applications
 ```
 
-## 🌐 Backend Environment Variables
-
-- `backend/` (Node):
-  - `PORT`: port to listen on (default 5001)
-  - `CORS_ORIGIN`: allowed origin for frontend requests
-  - `LLM_URL`: URL to the LLM API (e.g., Ollama instance)
-  - `MODEL_NAME`: model name
-
-- `kanban_api/` (FastAPI):
-  - `DATABASE_URL`: `postgresql+psycopg2://appuser:apppass@postgres:5432/app_db`
-  - `CORS_ORIGIN`: `http://localhost:8080`
-  - `AI_PROVIDER`: `ollama` or `openai`
-  - `MODEL_NAME`: `gemma3:1b` (default)
-  - `OLLAMA_BASE_URL`: `http://host.docker.internal:11434`
-  - `OPENAI_BASE_URL`: OpenAI-compatible base URL (e.g. `https://api.openai.com/v1` or a gateway)
-  - `OPENAI_API_KEY`: API key when using the OpenAI-compatible provider
-
-## 📂 Output Directory
-
-All generated resumes and related files are saved in the local ./output directory, which is mounted into the backend container.
-
-## 🧾 Kanban: Save Resume to Card & Export
-
-You can generate, edit, save, and export resumes directly from the Kanban modal (Details → Resume tab).
-
-### From the UI
-
-1. Open a card → Details → Resume tab.
-2. Paste the Job Description and optionally your Profile, then click "AI: Generate Resume".
-3. Edit the Markdown as needed and click "Save to Card".
-   - A notice will show the total number of saved versions linked to this card.
-4. Click "Export PDF" or "Export DOCX" to download via Pandoc.
-
-### API Endpoints (FastAPI)
-
-- Create/save resume linked to a card:
+Create a resume linked to an application card:
 
 ```bash
 curl -s -X POST http://localhost:8000/resumes \
@@ -89,93 +77,102 @@ curl -s -X POST http://localhost:8000/resumes \
       }'
 ```
 
-- List resumes for a card:
+List saved resumes for a card:
 
 ```bash
 curl -s http://localhost:8000/resumes/applications/1
 ```
 
-- Export latest resume for a card (PDF or DOCX):
+Export the latest saved resume:
 
 ```bash
 curl -L -o resume.pdf  "http://localhost:8000/resumes/applications/1/export?format=pdf"
 curl -L -o resume.docx "http://localhost:8000/resumes/applications/1/export?format=docx"
 ```
 
-Pandoc is installed in the `kanban_api` container (see `kanban_api/Dockerfile`).
+## AI Provider Setup
 
-## 🤖 AI (Ollama) Setup (Local Host)
+### Ollama on the Local Host
 
-The Kanban AI endpoints use Ollama via `OLLAMA_BASE_URL`. To run locally on the host:
-
-1) Start the Ollama server (host):
+Start Ollama:
 
 ```bash
 ollama serve
 ```
 
-2) In a separate terminal, pull the model tag used by this repo (smallest):
+Pull the default model tag used by this repo:
 
 ```bash
 ollama pull gemma3:1b
 ```
 
-3) Verify Ollama is up and reachable:
+Verify that Ollama is reachable:
 
 ```bash
 curl -s http://localhost:11434/api/tags
 ```
 
-4) Test AI endpoints (kanban_api):
+The default Docker configuration expects:
 
-```bash
-curl -s -X POST http://localhost:8000/ai/summarize-board \
-  -H 'Content-Type: application/json' -d '{"board_id":1}'
-
-curl -s -X POST http://localhost:8000/ai/tag-application \
-  -H 'Content-Type: application/json' -d '{"application_id":1, "max_tags":5}'
-
-curl -s -X POST http://localhost:8000/ai/next-steps \
-  -H 'Content-Type: application/json' -d '{"application_id":1}'
+```env
+AI_PROVIDER=ollama
+MODEL_NAME=gemma3:1b
+OLLAMA_BASE_URL=http://host.docker.internal:11434
 ```
 
-Note: `kanban_api` includes `extra_hosts: host.docker.internal:host-gateway` so the container can reach the host Ollama.
+`kanban_api` includes `extra_hosts: host.docker.internal:host-gateway` so the container can reach the host Ollama instance.
 
-## 🔌 OpenAI-compatible Provider Configuration
+### OpenAI-Compatible Provider
 
-Both the Node `backend/` and the Python `kanban_api/` can be configured to use OpenAI-compatible APIs.
+The Node backend can use an OpenAI-compatible Chat Completions endpoint:
 
-- Backend (Node):
-  - Select the provider via `LLM` env: `ollamaService` (default) or `openaiService`.
-  - For Ollama (raw API):
-    - `LLM=ollamaService`
-    - `LLM_URL=http://host.docker.internal:11434/api/generate`
-    - `MODEL_NAME=gemma3:1b`
-  - For OpenAI-compatible (Chat Completions):
-    - `LLM=openaiService`
-    - `LLM_URL=https://api.openai.com/v1/chat/completions` (or a compatible gateway)
-    - `OPENAI_API_KEY=...`
-    - `MODEL_NAME=gpt-4o-mini` (or a compatible model on your provider)
+```env
+LLM=openaiService
+LLM_URL=https://api.openai.com/v1/chat/completions
+OPENAI_API_KEY=...
+MODEL_NAME=gpt-4o-mini
+```
 
-- Kanban API (FastAPI):
-  - Select the provider via `AI_PROVIDER=ollama|openai`.
-  - For Ollama:
-    - `AI_PROVIDER=ollama`
-    - `OLLAMA_BASE_URL=http://host.docker.internal:11434`
-    - `MODEL_NAME=gemma3:1b`
-  - For OpenAI-compatible:
-    - `AI_PROVIDER=openai`
-    - `OPENAI_BASE_URL=https://api.openai.com/v1`
-    - `OPENAI_API_KEY=...`
-    - `MODEL_NAME=gpt-4o-mini` (or a compatible model on your provider)
+The Kanban API can be configured separately:
 
-## 📌 Kanban-Board (New Frontend — Under Development)
+```env
+AI_PROVIDER=openai
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_API_KEY=...
+MODEL_NAME=gpt-4o-mini
+```
 
-We are unifying the frontend into a single CRA app with routes `/kanban` and `/resume`, porting the exact Kanban styles.
+## Environment Variables
 
-Current status:
+### `backend/`
 
-- Resume generation works via the classic Node backend.
-- Kanban API is live with CRUD and AI endpoints.
-- Frontend unification in progress.
+- `PORT`: port to listen on, default `5001`
+- `CORS_ORIGIN`: allowed origin for frontend requests
+- `LLM`: `ollamaService` or `openaiService`
+- `LLM_URL`: URL for the selected LLM provider
+- `MODEL_NAME`: model name
+- `OPENAI_API_KEY`: API key when using an OpenAI-compatible provider
 
+### `kanban_api/`
+
+- `DATABASE_URL`: `postgresql+psycopg2://appuser:apppass@postgres:5432/app_db`
+- `CORS_ORIGIN`: `http://localhost:8080`
+- `AI_PROVIDER`: `ollama` or `openai`
+- `MODEL_NAME`: default `gemma3:1b`
+- `OLLAMA_BASE_URL`: `http://host.docker.internal:11434`
+- `OPENAI_BASE_URL`: OpenAI-compatible base URL such as `https://api.openai.com/v1`
+- `OPENAI_API_KEY`: API key when using an OpenAI-compatible provider
+
+## Output Directory
+
+Generated resumes and related files are saved in the local `./output` directory, which is mounted into the backend container.
+
+Pandoc is installed in the `kanban_api` container for PDF and DOCX export.
+
+## Project Status
+
+The frontend is being unified into a single CRA app with `/kanban` and `/resume` routes.
+
+- Resume generation works through the classic Node backend.
+- The Kanban API is live with CRUD and AI endpoints.
+- Frontend unification is still in progress.
