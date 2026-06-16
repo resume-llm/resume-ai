@@ -1,4 +1,4 @@
--- Create application user and databases
+-- Create application user if it doesn't exist
 DO
 $$
 BEGIN
@@ -9,15 +9,6 @@ BEGIN
 END
 $$;
 
--- Create databases if not exist
-DO
-$$
-BEGIN
-   IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'app_db') THEN
-      CREATE DATABASE app_db OWNER appuser;
-   END IF;
-   IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'mlflow') THEN
-      CREATE DATABASE mlflow OWNER appuser;
-   END IF;
-END
-$$;
+-- app_db is created automatically by POSTGRES_DB env var in docker-compose;
+-- this grants ownership in case the role was created after the database.
+ALTER DATABASE app_db OWNER TO appuser;

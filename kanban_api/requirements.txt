@@ -7,4 +7,4 @@ python-dotenv==1.2.2
 alembic==1.13.2
 langchain==0.3.30
 langchain-ollama==0.2.0
-langchain-openai==1.1.14
+langchain-openai==0.2.4
