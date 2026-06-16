@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { getBoards, getColumns, createApplication, createResume } from "../api/kanban";
 import "../styles/Resume.css";
 import "../styles/Kanban.css";
 
@@ -17,7 +19,15 @@ function detectHiddenContent(text) {
   return warnings;
 }
 
+function inferTitle(jd) {
+  const first = jd.split("\n").find((l) => l.trim());
+  if (!first) return "New Application";
+  return first.trim().slice(0, 80);
+}
+
 export default function ResumePage() {
+  const navigate = useNavigate();
+
   const [profile, setProfile] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [generated, setGenerated] = useState("");
@@ -25,20 +35,63 @@ export default function ResumePage() {
   const [error, setError] = useState(null);
   const [warnings, setWarnings] = useState([]);
 
+  // Save-to-Kanban state
+  const [appTitle, setAppTitle] = useState("");
+  const [appCompany, setAppCompany] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+
   const generate = async () => {
     setLoading(true);
     setError(null);
+    setGenerated("");
     setWarnings(detectHiddenContent(jobDescription));
     try {
       const { data } = await axios.post(`${BACKEND_URL}/api/resume/generate`, {
         resumeText: profile,
         jobDescription,
       });
-      setGenerated(data.markdown || "");
+      const md = data.markdown || "";
+      setGenerated(md);
+      setAppTitle(inferTitle(jobDescription));
     } catch {
       setError("Generation failed. Check that the backend is running and try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const saveToKanban = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const boards = await getBoards();
+      if (!boards.length) throw new Error("No boards found");
+      const boardId = boards[0].id;
+      const cols = await getColumns(boardId);
+      const defaultColId = cols[0]?.id ?? null;
+
+      const app = await createApplication(boardId, {
+        title: appTitle || inferTitle(jobDescription),
+        company: appCompany,
+        description: jobDescription,
+        status: "Applied",
+        tags: [],
+        column_id: defaultColId,
+      });
+
+      await createResume({
+        applicationId: app.id,
+        jobDescription,
+        inputProfile: profile,
+        markdown: generated,
+      });
+
+      navigate("/kanban");
+    } catch (e) {
+      setSaveError("Could not save to Kanban. Check that the API is running.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -52,13 +105,14 @@ export default function ResumePage() {
       </div>
 
       <div className="resume-layout">
-        {loading && (
+        {(loading || saving) && (
           <div className="progress">
             <div className="progress__bar" />
           </div>
         )}
 
         <div className="resume-columns">
+          {/* ── Left: inputs ── */}
           <div className="resume-form-pane">
             <div className="resume-field">
               <label className="resume-label">Your profile</label>
@@ -85,14 +139,44 @@ export default function ResumePage() {
             <button
               className="btn resume-generate-btn"
               onClick={generate}
-              disabled={loading || !jobDescription.trim()}
+              disabled={loading || saving || !jobDescription.trim()}
             >
               {loading ? "Generating…" : "Generate Resume"}
             </button>
 
             {error && <p className="resume-error">{error}</p>}
+
+            {/* ── Save to Kanban ── */}
+            {generated && (
+              <div className="resume-save-card">
+                <p className="resume-save-label">Save to Kanban to edit and export</p>
+                <div className="resume-save-row">
+                  <input
+                    className="resume-save-input"
+                    placeholder="Role / title"
+                    value={appTitle}
+                    onChange={(e) => setAppTitle(e.target.value)}
+                  />
+                  <input
+                    className="resume-save-input"
+                    placeholder="Company (optional)"
+                    value={appCompany}
+                    onChange={(e) => setAppCompany(e.target.value)}
+                  />
+                </div>
+                <button
+                  className="btn resume-generate-btn"
+                  onClick={saveToKanban}
+                  disabled={saving || loading}
+                >
+                  {saving ? "Saving…" : "Save to Kanban →"}
+                </button>
+                {saveError && <p className="resume-error">{saveError}</p>}
+              </div>
+            )}
           </div>
 
+          {/* ── Right: preview ── */}
           <div className="resume-preview-pane">
             <span className="resume-label">Preview</span>
             <div className="resume-preview-box">
