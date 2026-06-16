@@ -1,7 +1,11 @@
 services:
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        REACT_APP_API_BASE: ${REACT_APP_API_BASE:-http://localhost:8000}
+        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-http://localhost:5001}
     container_name: frontend
     ports:
     - 8080:8080
