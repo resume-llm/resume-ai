@@ -17,12 +17,15 @@ services:
     - ./output:/home/node/app/output
     environment:
     - CORS_ORIGIN=http://localhost:8080
+    - LLM=${LLM:-ollamaService}
     - LLM_URL=${LLM_URL:-http://host.docker.internal:11434/api/generate}
     - MODEL_NAME=${MODEL_NAME:-gemma3:1b}
     - PORT=5001
     - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     ports:
     - 5001:5001
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   postgres:
     image: postgres:16
@@ -41,16 +44,6 @@ services:
       interval: 3s
       timeout: 3s
       retries: 10
-
-  mlflow:
-    build: ./docker/mlflow
-    container_name: mlflow
-    ports:
-      - 5002:5000
-    depends_on:
-      - postgres
-    volumes:
-      - mlflow_artifacts:/mlflow-artifacts
 
   kanban_api:
     build: ./kanban_api
@@ -78,4 +71,3 @@ services:
 
 volumes:
   pgdata:
-  mlflow_artifacts:
