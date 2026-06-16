@@ -1,50 +1,95 @@
 """
-AI endpoints powered by LangChain + Ollama.
-Uses ChatOllama with model and base URL from settings.
+AI endpoints powered by LangChain.
+Prompts are loaded from app/prompts/*.md so they can be versioned and tested independently.
 """
+import re
+import unicodedata
+from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, field_validator
 
 from .config import settings
 from .db import SessionLocal
 from .models import Application, Board, Column
 
-# LangChain providers
 try:
-    from langchain_ollama import ChatOllama  # Ollama provider
-except Exception:  # pragma: no cover
+    from langchain_ollama import ChatOllama
+except Exception:
     ChatOllama = None  # type: ignore
 
 try:
-    from langchain_openai import ChatOpenAI  # OpenAI-compatible provider
-except Exception:  # pragma: no cover
+    from langchain_openai import ChatOpenAI
+except Exception:
     ChatOpenAI = None  # type: ignore
 
 router = APIRouter(prefix="/ai", tags=["ai"])
+
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
+
+
+def _load_prompt(name: str) -> str:
+    return (_PROMPTS_DIR / f"{name}.md").read_text(encoding="utf-8")
 
 
 def get_llm():
     provider = settings.AI_PROVIDER.lower()
     if provider == "ollama":
         if ChatOllama is None:
-            raise HTTPException(status_code=500, detail="ChatOllama is not available. Check dependencies.")
+            raise HTTPException(status_code=500, detail="ChatOllama not available. Check dependencies.")
         return ChatOllama(model=settings.MODEL_NAME, base_url=settings.OLLAMA_BASE_URL, temperature=0.2)
+    elif provider == "ollama_cloud":
+        if ChatOpenAI is None:
+            raise HTTPException(status_code=500, detail="ChatOpenAI not available. Check dependencies.")
+        if not settings.OLLAMA_API_KEY:
+            raise HTTPException(status_code=500, detail="OLLAMA_API_KEY must be set for ollama_cloud provider")
+        return ChatOpenAI(
+            model=settings.MODEL_NAME,
+            base_url=settings.OLLAMA_CLOUD_BASE_URL,
+            api_key=settings.OLLAMA_API_KEY,
+            temperature=0.2,
+        )
     elif provider == "openai":
         if ChatOpenAI is None:
-            raise HTTPException(status_code=500, detail="ChatOpenAI is not available. Check dependencies.")
+            raise HTTPException(status_code=500, detail="ChatOpenAI not available. Check dependencies.")
         if not settings.OPENAI_BASE_URL or not settings.OPENAI_API_KEY:
-            raise HTTPException(status_code=500, detail="OPENAI_BASE_URL and OPENAI_API_KEY must be set for OpenAI provider")
-        # ChatOpenAI accepts base_url for compatible providers (e.g., local OpenAI-compatible gateways)
-        return ChatOpenAI(model=settings.MODEL_NAME, base_url=settings.OPENAI_BASE_URL, api_key=settings.OPENAI_API_KEY, temperature=0.2)
-    else:
-        raise HTTPException(status_code=400, detail=f"Unsupported AI_PROVIDER: {settings.AI_PROVIDER}")
+            raise HTTPException(status_code=500, detail="OPENAI_BASE_URL and OPENAI_API_KEY must be set for openai provider")
+        return ChatOpenAI(
+            model=settings.MODEL_NAME,
+            base_url=settings.OPENAI_BASE_URL,
+            api_key=settings.OPENAI_API_KEY,
+            temperature=0.2,
+        )
+    raise HTTPException(status_code=400, detail=f"Unsupported AI_PROVIDER: {settings.AI_PROVIDER}")
 
+
+_ZERO_WIDTH = frozenset('​‌‍⁠﻿­')
+
+
+def _detect_hidden_content(text: str) -> List[str]:
+    """Return ATS-risk warnings for a raw job description string."""
+    warnings: List[str] = []
+    if any(c in text for c in _ZERO_WIDTH):
+        warnings.append(
+            "Job description contains hidden zero-width characters — possible ATS fingerprinting trap."
+        )
+    if re.search(r'[ \t]{15,}', text):
+        warnings.append("Job description contains unusual whitespace sequences that may hide text.")
+    non_printable = sum(
+        1 for c in text
+        if unicodedata.category(c).startswith('C') and c not in '\n\r\t '
+    )
+    if non_printable:
+        warnings.append(f"Job description contains {non_printable} non-printable character(s).")
+    return warnings
+
+
+# -------- Summarize Board --------
 
 class SummarizeBoardRequest(BaseModel):
     board_id: int
-    focus: Optional[str] = None  # optional extra instruction
+    focus: Optional[str] = None
 
 
 class SummarizeBoardResponse(BaseModel):
@@ -65,75 +110,83 @@ def summarize_board(body: SummarizeBoardRequest):
             .order_by(Application.created_at.desc())
             .all()
         )
-        # Build a compact context for the LLM
         col_lines = [f"- {c.position}. {c.name}" for c in columns]
         app_lines = [
             f"• [{a.id}] {a.title} @ {a.company or '-'} | status={a.status or '-'} | column_id={a.column_id}"
             for a in apps
         ]
-        focus_text = f"\nFocus: {body.focus}" if body.focus else ""
-        prompt = (
-            "You are a helpful assistant for a job application Kanban board.\n"
-            "Summarize the current pipeline, risks, and immediate priorities succinctly.\n"
-            "Board: {board}\nColumns:\n{columns}\nApplications:\n{applications}\n" + focus_text + "\n"
-            "Return a short, actionable summary."
-        ).format(
+        prompt = _load_prompt("summarize_board").format(
             board=board.name,
             columns="\n".join(col_lines) or "(none)",
             applications="\n".join(app_lines) or "(none)",
+            focus=f"\nFocus: {body.focus}" if body.focus else "",
         )
         llm = get_llm()
         msg = llm.invoke(prompt)
-        text = getattr(msg, "content", str(msg))
-        return SummarizeBoardResponse(summary=text)
+        return SummarizeBoardResponse(summary=getattr(msg, "content", str(msg)))
     finally:
         db.close()
 
 
-# -------- Generate Resume (Markdown) --------
+# -------- Generate Resume --------
+
 class GenerateResumeRequest(BaseModel):
     application_id: int
     job_description: str
     profile: Optional[str] = None
 
+    @field_validator("job_description")
+    @classmethod
+    def jd_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("job_description must not be empty")
+        if len(v) > 20_000:
+            raise ValueError("job_description exceeds 20 000 character limit")
+        return v
+
 
 class GenerateResumeResponse(BaseModel):
     markdown: str
+    warnings: List[str] = []
 
 
 @router.post("/generate-resume", response_model=GenerateResumeResponse)
 def generate_resume(body: GenerateResumeRequest):
+    ats_warnings = _detect_hidden_content(body.job_description)
     db = SessionLocal()
     try:
         app = db.query(Application).filter(Application.id == body.application_id).first()
         if not app:
             raise HTTPException(status_code=404, detail="Application not found")
-        profile_text = f"\nCandidate profile:\n{body.profile}" if body.profile else ""
-        prompt = (
-            "You are a resume writer. Create a concise, tailored resume in GitHub-flavored Markdown "
-            "for the following job application and job description. Focus on impact, keywords, and quantifiable results.\n"
-            "Return only valid Markdown.\n\n"
-            "Application:\nTitle: {title}\nCompany: {company}\nDescription: {desc}\n"
-            "Job Description:\n{jd}\n"
-            + profile_text +
-            "\nFormat: start with a short summary, then skills, experience (bullets), education."
-        ).format(
+        prompt = _load_prompt("generate_resume").format(
             title=app.title,
             company=app.company or "-",
             desc=app.description or "-",
             jd=body.job_description,
+            profile=f"\nCandidate profile:\n{body.profile}" if body.profile else "",
         )
         llm = get_llm()
         msg = llm.invoke(prompt)
-        text = getattr(msg, "content", str(msg))
-        return GenerateResumeResponse(markdown=text)
+        return GenerateResumeResponse(
+            markdown=getattr(msg, "content", str(msg)),
+            warnings=ats_warnings,
+        )
     finally:
         db.close()
 
 
+# -------- Tag Application --------
+
 class TagApplicationRequest(BaseModel):
     application_id: int
     max_tags: int = 5
+
+    @field_validator("max_tags")
+    @classmethod
+    def max_tags_range(cls, v: int) -> int:
+        if not (1 <= v <= 20):
+            raise ValueError("max_tags must be between 1 and 20")
+        return v
 
 
 class TagApplicationResponse(BaseModel):
@@ -147,21 +200,22 @@ def tag_application(body: TagApplicationRequest):
         app = db.query(Application).filter(Application.id == body.application_id).first()
         if not app:
             raise HTTPException(status_code=404, detail="Application not found")
-        desc = app.description or ""
-        prompt = (
-            "Extract up to {k} concise tags for the following job application.\n"
-            "Title: {title}\nCompany: {company}\nDescription: {desc}\n"
-            "Return as a comma-separated list."
-        ).format(k=body.max_tags, title=app.title, company=app.company or "-", desc=desc)
+        prompt = _load_prompt("tag_application").format(
+            k=body.max_tags,
+            title=app.title,
+            company=app.company or "-",
+            desc=app.description or "-",
+        )
         llm = get_llm()
         msg = llm.invoke(prompt)
         text = getattr(msg, "content", str(msg))
-        # simple parse of comma-separated tags
         tags = [t.strip() for t in text.replace("\n", " ").split(",") if t.strip()]
         return TagApplicationResponse(tags=tags[: body.max_tags])
     finally:
         db.close()
 
+
+# -------- Next Steps --------
 
 class NextStepsRequest(BaseModel):
     application_id: int
@@ -178,11 +232,7 @@ def next_steps(body: NextStepsRequest):
         app = db.query(Application).filter(Application.id == body.application_id).first()
         if not app:
             raise HTTPException(status_code=404, detail="Application not found")
-        prompt = (
-            "Given this application, propose 3 concrete next steps.\n"
-            "Title: {title}\nCompany: {company}\nStatus: {status}\nDescription: {desc}\n"
-            "Return as a numbered list."
-        ).format(
+        prompt = _load_prompt("next_steps").format(
             title=app.title,
             company=app.company or "-",
             status=app.status or "-",
@@ -191,10 +241,8 @@ def next_steps(body: NextStepsRequest):
         llm = get_llm()
         msg = llm.invoke(prompt)
         text = getattr(msg, "content", str(msg))
-        # parse numbered list fallback
         lines = [l.strip(" -•\t") for l in text.splitlines() if l.strip()]
-        lines = [l.split(". ", 1)[-1] if l[:2].isdigit() else l for l in lines]
-        steps = [l for l in lines if l]
-        return NextStepsResponse(steps=steps[:3])
+        lines = [l.split(". ", 1)[-1] if l[:2].rstrip(". ").isdigit() else l for l in lines]
+        return NextStepsResponse(steps=[l for l in lines if l][:3])
     finally:
         db.close()

@@ -13,9 +13,10 @@ services:
     - ./output:/home/node/app/output
     environment:
     - CORS_ORIGIN=http://localhost:8080
-    - LLM_URL=http://host.docker.internal:11434/api/generate
-    - MODEL_NAME=gemma3:1b
+    - LLM_URL=${LLM_URL:-http://host.docker.internal:11434/api/generate}
+    - MODEL_NAME=${MODEL_NAME:-gemma3:1b}
     - PORT=5001
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     ports:
     - 5001:5001
 
@@ -53,9 +54,16 @@ services:
     environment:
       CORS_ORIGIN: http://localhost:8080
       DATABASE_URL: postgresql+psycopg2://appuser:apppass@postgres:5432/app_db
-      AI_PROVIDER: ollama
-      MODEL_NAME: gemma3:1b
-      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      AI_PROVIDER: ${AI_PROVIDER:-ollama}
+      MODEL_NAME: ${MODEL_NAME:-gemma3:1b}
+      # Local Ollama (used when AI_PROVIDER=ollama)
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      # Ollama Cloud (used when AI_PROVIDER=ollama_cloud)
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
+      OLLAMA_CLOUD_BASE_URL: ${OLLAMA_CLOUD_BASE_URL:-https://ollama.com/v1}
+      # OpenAI-compatible (used when AI_PROVIDER=openai)
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     ports:
       - 8000:8000
     depends_on:

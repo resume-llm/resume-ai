@@ -1,35 +1,42 @@
 import React, { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { getColumns, getApplications, moveApplication, updateApplication, aiSummarizeBoard, aiTagApplication, aiNextSteps, aiGenerateResume, createResume, createApplication, exportLatestResume, listResumesForApplication } from "../api/kanban";
+import { getBoards, getColumns, getApplications, moveApplication, updateApplication, aiSummarizeBoard, aiTagApplication, aiNextSteps, aiGenerateResume, createResume, createApplication, exportLatestResume, listResumesForApplication } from "../api/kanban";
 import "../styles/Kanban.css";
 
+const stripCodeFences = (md = "") => {
+  if (!md) return "";
+  const m = md.match(/^```[a-zA-Z]*\r?\n([\s\S]*?)\n?```\s*$/);
+  return m ? m[1].trim() : md.trim();
+};
+
 export default function KanbanPage() {
-  const BOARD_ID = 1;
+  const [boardId, setBoardId] = useState(null);
   const [columns, setColumns] = useState([]);
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [editing, setEditing] = useState({}); // { [id]: { title, company, description } }
-  const [selected, setSelected] = useState(null); // card for modal
-  const [ai, setAi] = useState({ loading: false, summary: "", tags: [], steps: [], notice: "" });
-  const [tab, setTab] = useState("details"); // details | resume
+  const [editing, setEditing] = useState({});
+  const [selected, setSelected] = useState(null);
+  const [ai, setAi] = useState({ loading: false, summary: "", tags: [], steps: [], notice: "", warnings: [] });
+  const [tab, setTab] = useState("details");
   const [resume, setResume] = useState({ jd: "", profile: "", markdown: "" });
-  const stripCodeFences = (md = "") => {
-    if (!md) return "";
-    // remove leading ```lang and trailing ``` if present
-    const startStripped = md.replace(/^```[a-zA-Z]*\n?/, "");
-    const endStripped = startStripped.replace(/\n?```\s*$/, "");
-    return endStripped.trim();
-  };
 
   useEffect(() => {
     let mounted = true;
     async function load() {
       try {
         setLoading(true);
+        const boards = await getBoards();
+        if (!mounted) return;
+        if (!boards.length) {
+          setError("No boards found");
+          return;
+        }
+        const id = boards[0].id;
+        setBoardId(id);
         const [cols, applications] = await Promise.all([
-          getColumns(BOARD_ID),
-          getApplications(BOARD_ID),
+          getColumns(id),
+          getApplications(id),
         ]);
         if (!mounted) return;
         setColumns(cols);
@@ -58,7 +65,7 @@ export default function KanbanPage() {
         tags: [],
         column_id: defaultColId,
       };
-      const created = await createApplication(BOARD_ID, payload);
+      const created = await createApplication(boardId, payload);
       setApps((prev) => [created, ...prev]);
     } catch (e) {
       setError("Failed to add application");
@@ -68,9 +75,10 @@ export default function KanbanPage() {
   const generateResume = async () => {
     if (!selected || !resume.jd) return;
     try {
-      setAi((s) => ({ ...s, loading: true }));
-      const { markdown } = await aiGenerateResume({ applicationId: selected.id, jobDescription: resume.jd, profile: resume.profile });
+      setAi((s) => ({ ...s, loading: true, warnings: [] }));
+      const { markdown, warnings = [] } = await aiGenerateResume({ applicationId: selected.id, jobDescription: resume.jd, profile: resume.profile });
       setResume((r) => ({ ...r, markdown: stripCodeFences(markdown) }));
+      setAi((s) => ({ ...s, warnings }));
     } catch (e) {
       setError("AI resume generation failed");
     } finally {
@@ -189,7 +197,7 @@ export default function KanbanPage() {
   const runSummarize = async () => {
     try {
       setAi((s) => ({ ...s, loading: true, summary: "" }));
-      const { summary } = await aiSummarizeBoard(BOARD_ID);
+      const { summary } = await aiSummarizeBoard(boardId);
       setAi((s) => ({ ...s, loading: false, summary }));
     } catch (e) {
       setAi((s) => ({ ...s, loading: false }));
@@ -440,6 +448,12 @@ export default function KanbanPage() {
                     <button className="btn" onClick={() => exportLatest('docx')} disabled={ai.loading}>Export DOCX</button>
                   </div>
                   {ai.notice && <div className="kanban__loading">{ai.notice}</div>}
+                  {ai.warnings.length > 0 && (
+                    <div className="kanban__ats-warnings">
+                      <strong>⚠ ATS warnings</strong>
+                      <ul>{ai.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+                    </div>
+                  )}
                 </>
               )}
             </div>

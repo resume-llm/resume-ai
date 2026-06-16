@@ -241,3 +241,16 @@
   50% { transform: translateX(40%); opacity: 1; }
   100% { transform: translateX(220%); opacity: .6; }
 }
+
+.kanban__ats-warnings {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-left: 3px solid #f0a040;
+  background: rgba(240, 160, 64, 0.08);
+  border-radius: 4px;
+  font-size: 13px;
+}
+.kanban__ats-warnings ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}

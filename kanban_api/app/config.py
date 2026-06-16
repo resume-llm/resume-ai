@@ -7,11 +7,16 @@ class Settings(BaseModel):
         "DATABASE_URL",
         "postgresql+psycopg2://appuser:apppass@postgres:5432/app_db",
     )
-    # AI settings
-    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "ollama")  # ollama | openai
+    # AI provider: ollama | ollama_cloud | openai
+    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "ollama")
     MODEL_NAME: str = os.getenv("MODEL_NAME", "gemma3:1b")
+    # Local Ollama
     OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
-    OPENAI_BASE_URL: str = os.getenv("OPENAI_BASE_URL", "")  # e.g., https://api.openai.com/v1 or a compatible endpoint
+    # Ollama Cloud (OpenAI-compatible, no local Ollama required)
+    OLLAMA_API_KEY: str = os.getenv("OLLAMA_API_KEY", "")
+    OLLAMA_CLOUD_BASE_URL: str = os.getenv("OLLAMA_CLOUD_BASE_URL", "https://ollama.com/v1")
+    # OpenAI-compatible endpoint
+    OPENAI_BASE_URL: str = os.getenv("OPENAI_BASE_URL", "")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 
 settings = Settings()
