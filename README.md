@@ -192,3 +192,7 @@ AI prompts live in `kanban_api/app/prompts/` as Markdown files. Edit them direct
 ## Output Directory
 
 Generated resumes and related files are saved in the local `./output` directory, which is mounted into the backend container. Pandoc is installed in the `kanban_api` container for PDF and DOCX export.
+
+## 🔗 相关工具 / Related tools
+
+- [简历大师 Resume Master](https://markmiller1.github.io/resume-master/) — 免费、纯前端、隐私优先的简历生成器，64 套模板 + 面试/谈薪指南，数据不出本机
